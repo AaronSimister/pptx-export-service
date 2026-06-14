@@ -99,19 +99,37 @@ function addStandardLearningSlide(prs, slide, slideNum, brandColor) {
   const textWidth = colWidth - marginH;
 
   // IMAGE COLUMN
-  if (slide.generated_image_url) {
-    slid.addImage({
-      path: slide.generated_image_url,
-      x: imageX, y: imageY,
-      w: imageWidth, h: imageHeight,
-    });
-    // Border around image
-    slid.addShape(prs.ShapeType.rect, {
-      x: imageX, y: imageY,
-      w: imageWidth, h: imageHeight,
-      fill: { type: 'none' },
-      line: { color: COLORS.slateLight, width: 1 }
-    });
+  if (slide.generated_image_url && slide.generated_image_url.trim()) {
+    try {
+      slid.addImage({
+        path: slide.generated_image_url,
+        x: imageX, y: imageY,
+        w: imageWidth, h: imageHeight,
+      });
+      // Border around image
+      slid.addShape(prs.ShapeType.rect, {
+        x: imageX, y: imageY,
+        w: imageWidth, h: imageHeight,
+        fill: { type: 'none' },
+        line: { color: COLORS.slateLight, width: 1 }
+      });
+    } catch (imgErr) {
+      // Fallback if image fails
+      slid.addShape(prs.ShapeType.rect, {
+        x: imageX, y: imageY,
+        w: imageWidth, h: imageHeight,
+        fill: { color: COLORS.slateLight },
+        line: { color: COLORS.slate, width: 1, dashType: 'dash' }
+      });
+      slid.addText('Image failed to load', {
+        x: imageX, y: imageY + imageHeight / 2 - 0.2,
+        w: imageWidth, h: 0.4,
+        fontSize: 11,
+        color: COLORS.slate,
+        align: 'center',
+        valign: 'middle'
+      });
+    }
   } else {
     // Placeholder
     slid.addShape(prs.ShapeType.rect, {
@@ -146,10 +164,17 @@ function addStandardLearningSlide(prs, slide, slideNum, brandColor) {
   });
   textCursorY += 0.7;
 
-  // Bullets (max 3)
+  // Bullets (max 3) — strip leading markers only once
   const bullets = (slide.body_content || '')
     .split('\n')
-    .map(l => l.replace(/^[\d]+\.\s*/, '').replace(/^[•\-]\s*/, '').trim())
+    .map(l => {
+      let text = l.trim();
+      // Remove leading number + period (e.g., "1. ")
+      text = text.replace(/^[\d]+\.\s+/, '');
+      // Remove leading bullet/dash (e.g., "• " or "- ")
+      text = text.replace(/^[•\-]\s+/, '');
+      return text.trim();
+    })
     .filter(l => l && !l.endsWith(':'))
     .slice(0, 3);
 
@@ -166,7 +191,7 @@ function addStandardLearningSlide(prs, slide, slideNum, brandColor) {
         align: 'left'
       });
 
-      // Bullet text
+      // Bullet text (no double-stripping)
       slid.addText(bullet, {
         x: textX + 0.35, y: textCursorY,
         w: textWidth - 0.35, h: 0.8,
@@ -273,17 +298,27 @@ function addSafetyCriticalSlide(prs, slide, slideNum, brandColor) {
   let textX = marginH;
   let textWidth = 8.2 - marginH * 2;
 
-  if (slide.generated_image_url) {
+  if (slide.generated_image_url && slide.generated_image_url.trim()) {
     const imageX = marginH;
     const imageY = headerBottomY + marginV;
     const imageWidth = colWidth - marginH;
     const imageHeight = contentHeight - marginV * 2;
 
-    slid.addImage({
-      path: slide.generated_image_url,
-      x: imageX, y: imageY,
-      w: imageWidth, h: imageHeight
-    });
+    try {
+      slid.addImage({
+        path: slide.generated_image_url,
+        x: imageX, y: imageY,
+        w: imageWidth, h: imageHeight
+      });
+    } catch (imgErr) {
+      // Fallback: show placeholder
+      slid.addShape(prs.ShapeType.rect, {
+        x: imageX, y: imageY,
+        w: imageWidth, h: imageHeight,
+        fill: { color: COLORS.slateLight },
+        line: { color: COLORS.slate, width: 1, dashType: 'dash' }
+      });
+    }
 
     textX = imageX + colWidth;
     textWidth = colWidth - marginH;
@@ -303,14 +338,20 @@ function addSafetyCriticalSlide(prs, slide, slideNum, brandColor) {
   });
   textCursorY += 0.6;
 
-  // Bullets (SOP facts)
-  const bullets = (slide.body_content || '')
+  // Bullets (SOP facts) — deduplicated
+  const bulletLines = (slide.body_content || '')
     .split('\n')
-    .filter(l => l.trim())
+    .map(l => {
+      let text = l.trim();
+      text = text.replace(/^[\d]+\.\s+/, '');
+      text = text.replace(/^[•\-]\s+/, '');
+      return text.trim();
+    })
+    .filter(l => l)
     .slice(0, 3);
 
-  if (bullets.length > 0) {
-    bullets.forEach((bullet, idx) => {
+  if (bulletLines.length > 0) {
+    bulletLines.forEach((bullet, idx) => {
       slid.addText(`${idx + 1}.`, {
         x: textX, y: textCursorY,
         w: 0.25, h: 0.25,
@@ -320,7 +361,7 @@ function addSafetyCriticalSlide(prs, slide, slideNum, brandColor) {
         fontFace: 'Calibri'
       });
 
-      slid.addText(bullet.replace(/^[\d]+\.\s*/, '').trim(), {
+      slid.addText(bullet, {
         x: textX + 0.35, y: textCursorY,
         w: textWidth - 0.35, h: 0.7,
         fontSize: 13,
@@ -334,7 +375,7 @@ function addSafetyCriticalSlide(prs, slide, slideNum, brandColor) {
   }
 
   // Hazards box (if no bullets)
-  if (bullets.length === 0 && slide.safety_callouts && slide.safety_callouts.length > 0) {
+  if (bulletLines.length === 0 && slide.safety_callouts && slide.safety_callouts.length > 0) {
     slid.addShape(prs.ShapeType.rect, {
       x: textX, y: textCursorY,
       w: textWidth, h: 1.2,
@@ -458,12 +499,22 @@ function addProcessChecklistSlide(prs, slide, slideNum, brandColor) {
   const checklistWidth = colWidth - 0.4;
 
   // Image (if exists)
-  if (slide.generated_image_url) {
-    slid.addImage({
-      path: slide.generated_image_url,
-      x: imageX, y: imageY,
-      w: imageWidth, h: imageHeight
-    });
+  if (slide.generated_image_url && slide.generated_image_url.trim()) {
+    try {
+      slid.addImage({
+        path: slide.generated_image_url,
+        x: imageX, y: imageY,
+        w: imageWidth, h: imageHeight
+      });
+    } catch (imgErr) {
+      // Fallback: show placeholder
+      slid.addShape(prs.ShapeType.rect, {
+        x: imageX, y: imageY,
+        w: imageWidth, h: imageHeight,
+        fill: { color: COLORS.slateLight },
+        line: { color: COLORS.slate, width: 1, dashType: 'dash' }
+      });
+    }
   }
 
   // Checklist title
@@ -479,13 +530,19 @@ function addProcessChecklistSlide(prs, slide, slideNum, brandColor) {
   });
   checklistY += 0.6;
 
-  // Checklist items (max 5)
-  const bullets = (slide.body_content || '')
+  // Checklist items (max 5) — deduplicated
+  const checklistItems = (slide.body_content || '')
     .split('\n')
-    .filter(l => l.trim())
+    .map(l => {
+      let text = l.trim();
+      text = text.replace(/^[\d]+\.\s+/, '');
+      text = text.replace(/^[•\-]\s+/, '');
+      return text.trim();
+    })
+    .filter(l => l)
     .slice(0, 5);
 
-  bullets.forEach((bullet, idx) => {
+  checklistItems.forEach((bullet, idx) => {
     // Checkbox (unchecked)
     slid.addShape(prs.ShapeType.rect, {
       x: checklistX, y: checklistY + 0.05,
@@ -495,7 +552,7 @@ function addProcessChecklistSlide(prs, slide, slideNum, brandColor) {
     });
 
     // Bullet text
-    slid.addText(bullet.replace(/^[\d]+\.\s*/, '').trim(), {
+    slid.addText(bullet, {
       x: checklistX + 0.3, y: checklistY,
       w: checklistWidth - 0.3, h: 0.5,
       fontSize: 13,
@@ -566,24 +623,33 @@ function addCoverSlide(prs, slide, brandColor) {
   // Full-color background
   slid.background = { color: primaryColor };
 
+  // Accent bar (vertical gradient-like stripe)
+  slid.addShape(prs.ShapeType.rect, {
+    x: 0, y: 0,
+    w: 0.15, h: '100%',
+    fill: { color: COLORS.white, transparency: 30 },
+    line: { type: 'none' }
+  });
+
   // Title (centered, large, white)
   slid.addText(slide.title || 'Training Program', {
-    x: 0.5, y: 2.5,
-    w: 8.5, h: 1,
+    x: 0.5, y: 2.0,
+    w: 8.5, h: 1.2,
     fontSize: 48,
     bold: true,
     color: COLORS.white,
     fontFace: 'Calibri',
     align: 'center',
-    valign: 'top',
-    wrap: true
+    valign: 'middle',
+    wrap: true,
+    lineSpacing: 32
   });
 
   // Subtitle (if exists)
   if (slide.subtitle) {
     slid.addText(slide.subtitle, {
-      x: 0.5, y: 3.6,
-      w: 8.5, h: 0.5,
+      x: 0.5, y: 3.3,
+      w: 8.5, h: 0.6,
       fontSize: 18,
       bold: false,
       color: COLORS.white,
@@ -595,23 +661,33 @@ function addCoverSlide(prs, slide, brandColor) {
 
   // Label
   slid.addText('PROFESSIONAL TRAINING', {
-    x: 0.5, y: 4.3,
+    x: 0.5, y: 4.2,
     w: 8.5, h: 0.3,
-    fontSize: 12,
+    fontSize: 11,
     bold: true,
-    color: 'rgba(255, 255, 255, 0.7)',
+    color: 'rgba(255, 255, 255, 0.8)',
     fontFace: 'Calibri',
     align: 'center'
   });
 
-  // Cover image (centered, if exists)
+  // Cover image (bottom-right, if exists)
   if (slide.generated_image_url) {
     slid.addImage({
       path: slide.generated_image_url,
-      x: 3.25, y: 0.8,
-      w: 3, h: 3
+      x: 5.0, y: 4.5,
+      w: 4.5, h: 2.5
     });
   }
+
+  // Footer date
+  slid.addText(new Date().toLocaleDateString('en-GB'), {
+    x: 0.5, y: 6.8,
+    w: 8.5, h: 0.25,
+    fontSize: 10,
+    color: 'rgba(255, 255, 255, 0.6)',
+    fontFace: 'Calibri',
+    align: 'right'
+  });
 }
 
 // ============================================================================
@@ -665,8 +741,15 @@ export default async function handler(req, res) {
         addStandardLearningSlide(prs, slide, slideNum, brandColor);
       }
 
-      // TODO: Add presenter notes with avatar script + video URL
-      // prs.slides[prs.slides.length - 1].notesText = slide.presenter_notes + '\n\nAvatar: ' + slide.avatar_video_url;
+      // Add presenter notes with avatar script + video reference (if available)
+      const lastSlide = prs.slides[prs.slides.length - 1];
+      if (slide.presenter_notes || slide.avatar_script || slide.avatar_video_url) {
+        let notesText = '';
+        if (slide.presenter_notes) notesText += slide.presenter_notes;
+        if (slide.avatar_script) notesText += `\n\n[AVATAR NARRATION]\n${slide.avatar_script}`;
+        if (slide.avatar_video_url) notesText += `\n\n[AVATAR VIDEO]\n${slide.avatar_video_url}`;
+        if (notesText) lastSlide.notesText = notesText;
+      }
     });
 
     // Generate and encode PPTX

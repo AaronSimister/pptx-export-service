@@ -43,9 +43,45 @@ const toEmu = (inches) => inches * 914400;
 const toInches = (emu) => emu / 914400;
 
 // ============================================================================
+// IMAGE FETCH HELPER
+// ============================================================================
+async function fetchAndConvertImageToBase64(imageUrl, slideNum) {
+  if (!imageUrl || !imageUrl.trim()) {
+    console.log(`[Image] Slide ${slideNum}: No URL provided`);
+    return null;
+  }
+
+  try {
+    console.log(`[Image] Slide ${slideNum}: Fetching from ${imageUrl.substring(0, 80)}...`);
+    
+    const response = await fetch(imageUrl);
+    
+    if (!response.ok) {
+      console.error(`[Image] Slide ${slideNum}: HTTP ${response.status} ${response.statusText}`);
+      return null;
+    }
+
+    const contentType = response.headers.get('content-type') || 'image/jpeg';
+    const buffer = Buffer.from(await response.arrayBuffer());
+    const base64 = buffer.toString('base64');
+    
+    console.log(`[Image] Slide ${slideNum}: ✓ Fetched ${buffer.length} bytes, type: ${contentType}`);
+    
+    return {
+      data: `data:${contentType};base64,${base64}`,
+      bytes: buffer.length,
+      contentType
+    };
+  } catch (err) {
+    console.error(`[Image] Slide ${slideNum}: Fetch error: ${err.message}`);
+    return null;
+  }
+}
+
+// ============================================================================
 // STANDARD LEARNING SLIDE LAYOUT
 // ============================================================================
-function addStandardLearningSlide(prs, slide, slideNum, brandColor) {
+async function addStandardLearningSlide(prs, slide, slideNum, brandColor) {
   const primaryColor = brandColor || COLORS.copper;
   const slid = prs.addSlide();
   
@@ -86,8 +122,8 @@ function addStandardLearningSlide(prs, slide, slideNum, brandColor) {
   const footerHeight = 0.292;
   const contentHeight = 6.25 - headerBottomY - footerHeight; // ~5.5 inches
   const colWidth = 4.25; // 50% of usable width
-  const marginH = 0.4;
-  const marginV = 0.3;
+  const marginH = 0.5;
+  const marginV = 0.4;
 
   const imageX = marginH;
   const imageY = headerBottomY + marginV;
@@ -101,33 +137,46 @@ function addStandardLearningSlide(prs, slide, slideNum, brandColor) {
   // IMAGE COLUMN
   if (slide.generated_image_url && slide.generated_image_url.trim()) {
     try {
-      slid.addImage({
-        path: slide.generated_image_url,
-        x: imageX, y: imageY,
-        w: imageWidth, h: imageHeight,
-      });
-      // Border around image
-      slid.addShape(prs.ShapeType.rect, {
-        x: imageX, y: imageY,
-        w: imageWidth, h: imageHeight,
-        fill: { type: 'none' },
-        line: { color: COLORS.slateLight, width: 1 }
-      });
+      console.log(`[Slide ${slideNum}] Processing image for standard learning layout`);
+      
+      const imageData = await fetchAndConvertImageToBase64(slide.generated_image_url, slideNum);
+      
+      if (imageData) {
+        slid.addImage({
+          data: imageData.data,
+          x: imageX, y: imageY,
+          w: imageWidth, h: imageHeight,
+        });
+        console.log(`[Slide ${slideNum}] ✓ Image added (${imageData.bytes} bytes)`);
+        
+        // Border around image
+        slid.addShape(prs.ShapeType.rect, {
+          x: imageX, y: imageY,
+          w: imageWidth, h: imageHeight,
+          fill: { type: 'none' },
+          line: { color: COLORS.slateLight, width: 1 }
+        });
+      } else {
+        throw new Error('Image fetch failed');
+      }
     } catch (imgErr) {
+      console.error(`[Slide ${slideNum}] ✗ Image error: ${imgErr.message}`);
       // Fallback if image fails
       slid.addShape(prs.ShapeType.rect, {
         x: imageX, y: imageY,
         w: imageWidth, h: imageHeight,
-        fill: { color: COLORS.slateLight },
-        line: { color: COLORS.slate, width: 1, dashType: 'dash' }
+        fill: { color: '#FEF3C7' },
+        line: { color: '#F59E0B', width: 2, dashType: 'solid' }
       });
-      slid.addText('Image failed to load', {
-        x: imageX, y: imageY + imageHeight / 2 - 0.2,
-        w: imageWidth, h: 0.4,
-        fontSize: 11,
-        color: COLORS.slate,
+      slid.addText('⚠️\nImage unavailable\n(check URL access)', {
+        x: imageX + 0.2, y: imageY + imageHeight / 2 - 0.4,
+        w: imageWidth - 0.4, h: 0.8,
+        fontSize: 12,
+        bold: true,
+        color: '#92400E',
         align: 'center',
-        valign: 'middle'
+        valign: 'middle',
+        wrap: true
       });
     }
   } else {
@@ -135,16 +184,18 @@ function addStandardLearningSlide(prs, slide, slideNum, brandColor) {
     slid.addShape(prs.ShapeType.rect, {
       x: imageX, y: imageY,
       w: imageWidth, h: imageHeight,
-      fill: { color: COLORS.slateLight },
-      line: { type: 'none' }
+      fill: { color: '#F0F4F6' },
+      line: { color: '#D1D5DB', width: 1, dashType: 'dash' }
     });
-    slid.addText('Image pending', {
-      x: imageX, y: imageY + imageHeight / 2 - 0.15,
-      w: imageWidth, h: 0.3,
-      fontSize: 12,
-      color: COLORS.slate,
+    slid.addText('📷\nNo image provided', {
+      x: imageX + 0.2, y: imageY + imageHeight / 2 - 0.35,
+      w: imageWidth - 0.4, h: 0.7,
+      fontSize: 13,
+      bold: true,
+      color: '#6B7280',
       align: 'center',
-      valign: 'middle'
+      valign: 'middle',
+      wrap: true
     });
   }
 
@@ -164,7 +215,7 @@ function addStandardLearningSlide(prs, slide, slideNum, brandColor) {
   });
   textCursorY += 0.7;
 
-  // Bullets (max 3) — strip leading markers only once
+  // Bullets (max 3) — clean numbered list
   const bullets = (slide.body_content || '')
     .split('\n')
     .map(l => {
@@ -180,28 +231,18 @@ function addStandardLearningSlide(prs, slide, slideNum, brandColor) {
 
   if (bullets.length > 0) {
     bullets.forEach((bullet, idx) => {
-      // Number badge
-      slid.addText(`${idx + 1}.`, {
+      // Inline numbered bullet with text
+      slid.addText(`${idx + 1}. ${bullet}`, {
         x: textX, y: textCursorY,
-        w: 0.25, h: 0.3,
-        fontSize: 16,
-        bold: true,
-        color: primaryColor,
-        fontFace: 'Calibri',
-        align: 'left'
-      });
-
-      // Bullet text (no double-stripping)
-      slid.addText(bullet, {
-        x: textX + 0.35, y: textCursorY,
-        w: textWidth - 0.35, h: 0.8,
-        fontSize: 15,
+        w: textWidth, h: 0.8,
+        fontSize: 13,
         color: COLORS.charcoal,
         fontFace: 'Calibri',
         wrap: true,
-        lineSpacing: 18
+        lineSpacing: 18,
+        valign: 'top'
       });
-      textCursorY += 0.9;
+      textCursorY += 1.0;
     });
   }
 
@@ -261,7 +302,7 @@ function addStandardLearningSlide(prs, slide, slideNum, brandColor) {
 // ============================================================================
 // SAFETY CRITICAL SLIDE LAYOUT
 // ============================================================================
-function addSafetyCriticalSlide(prs, slide, slideNum, brandColor) {
+async function addSafetyCriticalSlide(prs, slide, slideNum, brandColor) {
   const slid = prs.addSlide();
   slid.background = { color: COLORS.white };
 
@@ -305,12 +346,22 @@ function addSafetyCriticalSlide(prs, slide, slideNum, brandColor) {
     const imageHeight = contentHeight - marginV * 2;
 
     try {
-      slid.addImage({
-        path: slide.generated_image_url,
-        x: imageX, y: imageY,
-        w: imageWidth, h: imageHeight
-      });
+      console.log(`[Slide ${slideNum}] Processing image for safety critical layout`);
+      
+      const imageData = await fetchAndConvertImageToBase64(slide.generated_image_url, slideNum);
+      
+      if (imageData) {
+        slid.addImage({
+          data: imageData.data,
+          x: imageX, y: imageY,
+          w: imageWidth, h: imageHeight
+        });
+        console.log(`[Slide ${slideNum}] ✓ Image added (${imageData.bytes} bytes)`);
+      } else {
+        throw new Error('Image fetch failed');
+      }
     } catch (imgErr) {
+      console.error(`[Slide ${slideNum}] ✗ Image error: ${imgErr.message}`);
       // Fallback: show placeholder
       slid.addShape(prs.ShapeType.rect, {
         x: imageX, y: imageY,
@@ -338,7 +389,7 @@ function addSafetyCriticalSlide(prs, slide, slideNum, brandColor) {
   });
   textCursorY += 0.6;
 
-  // Bullets (SOP facts) — deduplicated
+  // Bullets (SOP facts) — clean inline numbered list
   const bulletLines = (slide.body_content || '')
     .split('\n')
     .map(l => {
@@ -352,25 +403,17 @@ function addSafetyCriticalSlide(prs, slide, slideNum, brandColor) {
 
   if (bulletLines.length > 0) {
     bulletLines.forEach((bullet, idx) => {
-      slid.addText(`${idx + 1}.`, {
+      slid.addText(`${idx + 1}. ${bullet}`, {
         x: textX, y: textCursorY,
-        w: 0.25, h: 0.25,
-        fontSize: 14,
-        bold: true,
-        color: '#FF6B35',
-        fontFace: 'Calibri'
-      });
-
-      slid.addText(bullet, {
-        x: textX + 0.35, y: textCursorY,
-        w: textWidth - 0.35, h: 0.7,
+        w: textWidth, h: 0.8,
         fontSize: 13,
         color: COLORS.charcoal,
         fontFace: 'Calibri',
         wrap: true,
-        lineSpacing: 16
+        lineSpacing: 18,
+        valign: 'top'
       });
-      textCursorY += 0.8;
+      textCursorY += 1.0;
     });
   }
 
@@ -462,7 +505,7 @@ function addSafetyCriticalSlide(prs, slide, slideNum, brandColor) {
 // ============================================================================
 // PROCESS CHECKLIST SLIDE LAYOUT
 // ============================================================================
-function addProcessChecklistSlide(prs, slide, slideNum, brandColor) {
+async function addProcessChecklistSlide(prs, slide, slideNum, brandColor) {
   const primaryColor = brandColor || COLORS.copper;
   const slid = prs.addSlide();
   slid.background = { color: COLORS.white };
@@ -501,12 +544,22 @@ function addProcessChecklistSlide(prs, slide, slideNum, brandColor) {
   // Image (if exists)
   if (slide.generated_image_url && slide.generated_image_url.trim()) {
     try {
-      slid.addImage({
-        path: slide.generated_image_url,
-        x: imageX, y: imageY,
-        w: imageWidth, h: imageHeight
-      });
+      console.log(`[Slide ${slideNum}] Processing image for process checklist layout`);
+      
+      const imageData = await fetchAndConvertImageToBase64(slide.generated_image_url, slideNum);
+      
+      if (imageData) {
+        slid.addImage({
+          data: imageData.data,
+          x: imageX, y: imageY,
+          w: imageWidth, h: imageHeight
+        });
+        console.log(`[Slide ${slideNum}] ✓ Image added (${imageData.bytes} bytes)`);
+      } else {
+        throw new Error('Image fetch failed');
+      }
     } catch (imgErr) {
+      console.error(`[Slide ${slideNum}] ✗ Image error: ${imgErr.message}`);
       // Fallback: show placeholder
       slid.addShape(prs.ShapeType.rect, {
         x: imageX, y: imageY,
@@ -530,7 +583,7 @@ function addProcessChecklistSlide(prs, slide, slideNum, brandColor) {
   });
   checklistY += 0.6;
 
-  // Checklist items (max 5) — deduplicated
+  // Checklist items (max 5) — checkbox + text inline
   const checklistItems = (slide.body_content || '')
     .split('\n')
     .map(l => {
@@ -543,26 +596,27 @@ function addProcessChecklistSlide(prs, slide, slideNum, brandColor) {
     .slice(0, 5);
 
   checklistItems.forEach((bullet, idx) => {
-    // Checkbox (unchecked)
+    // Checkbox (unchecked) — small, inline
     slid.addShape(prs.ShapeType.rect, {
-      x: checklistX, y: checklistY + 0.05,
-      w: 0.2, h: 0.2,
+      x: checklistX, y: checklistY + 0.1,
+      w: 0.18, h: 0.18,
       fill: { type: 'none' },
-      line: { color: primaryColor, width: 2 }
+      line: { color: primaryColor, width: 1.5 }
     });
 
-    // Bullet text
-    slid.addText(bullet, {
-      x: checklistX + 0.3, y: checklistY,
-      w: checklistWidth - 0.3, h: 0.5,
-      fontSize: 13,
+    // Checkbox text — starts after box
+    slid.addText(`☐  ${bullet}`, {
+      x: checklistX, y: checklistY,
+      w: checklistWidth, h: 0.75,
+      fontSize: 12,
       color: COLORS.charcoal,
       fontFace: 'Calibri',
       wrap: true,
+      lineSpacing: 16,
       valign: 'top'
     });
 
-    checklistY += 0.65;
+    checklistY += 0.9;
   });
 
   // Quality check callout (if exists)
@@ -616,7 +670,7 @@ function addProcessChecklistSlide(prs, slide, slideNum, brandColor) {
 // ============================================================================
 // COVER SLIDE LAYOUT
 // ============================================================================
-function addCoverSlide(prs, slide, brandColor) {
+async function addCoverSlide(prs, slide, slideNum, brandColor) {
   const primaryColor = brandColor || COLORS.copper;
   const slid = prs.addSlide();
   
@@ -672,11 +726,22 @@ function addCoverSlide(prs, slide, brandColor) {
 
   // Cover image (bottom-right, if exists)
   if (slide.generated_image_url) {
-    slid.addImage({
-      path: slide.generated_image_url,
-      x: 5.0, y: 4.5,
-      w: 4.5, h: 2.5
-    });
+    try {
+      console.log(`[Slide ${slideNum}] Processing image for cover slide layout`);
+      
+      const imageData = await fetchAndConvertImageToBase64(slide.generated_image_url, slideNum);
+      
+      if (imageData) {
+        slid.addImage({
+          data: imageData.data,
+          x: 5.0, y: 4.5,
+          w: 4.5, h: 2.5
+        });
+        console.log(`[Slide ${slideNum}] ✓ Cover image added (${imageData.bytes} bytes)`);
+      }
+    } catch (imgErr) {
+      console.error(`[Slide ${slideNum}] ✗ Cover image error: ${imgErr.message}`);
+    }
   }
 
   // Footer date
@@ -726,19 +791,20 @@ export default async function handler(req, res) {
 
     const brandColor = presentation.brandKit?.primary || COLORS.copper;
 
-    // Generate slides
-    slides.forEach((slide, idx) => {
+    // Generate slides (async iteration)
+    for (let idx = 0; idx < slides.length; idx++) {
+      const slide = slides[idx];
       const slideNum = idx + 1;
       const layoutType = slide.layout_type || 'standard_learning';
 
       if (layoutType === 'cover' || idx === 0) {
-        addCoverSlide(prs, slide, brandColor);
+        await addCoverSlide(prs, slide, slideNum, brandColor);
       } else if (layoutType === 'safety_critical' || (slide.safety_callouts && slide.safety_callouts.length > 0)) {
-        addSafetyCriticalSlide(prs, slide, slideNum, brandColor);
+        await addSafetyCriticalSlide(prs, slide, slideNum, brandColor);
       } else if (layoutType === 'process_checklist' || (slide.quality_callouts && slide.quality_callouts.length > 0)) {
-        addProcessChecklistSlide(prs, slide, slideNum, brandColor);
+        await addProcessChecklistSlide(prs, slide, slideNum, brandColor);
       } else {
-        addStandardLearningSlide(prs, slide, slideNum, brandColor);
+        await addStandardLearningSlide(prs, slide, slideNum, brandColor);
       }
 
       // Add presenter notes with avatar script + video reference (if available)
@@ -750,7 +816,7 @@ export default async function handler(req, res) {
         if (slide.avatar_video_url) notesText += `\n\n[AVATAR VIDEO]\n${slide.avatar_video_url}`;
         if (notesText) lastSlide.notesText = notesText;
       }
-    });
+    }
 
     // Generate and encode PPTX
     const buffer = await prs.write({ outputType: 'arraybuffer' });

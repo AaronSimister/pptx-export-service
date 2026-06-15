@@ -1,4 +1,4 @@
-// Vercel Serverless Function: PPTX Export with Phase 2 Visual Fidelity
+// Vercel Serverless Function: PPTX Export with Phase 2 Visual Fidelity + Brand Kit
 // Uses pptxgenjs to generate branded slides matching TrainingDeckLayouts
 // Node.js 18+, Express middleware compatible
 
@@ -220,9 +220,7 @@ async function addStandardLearningSlide(prs, slide, slideNum, brandColor) {
     .split('\n')
     .map(l => {
       let text = l.trim();
-      // Remove leading number + period (e.g., "1. ")
       text = text.replace(/^[\d]+\.\s+/, '');
-      // Remove leading bullet/dash (e.g., "• " or "- ")
       text = text.replace(/^[•\-]\s+/, '');
       return text.trim();
     })
@@ -231,7 +229,6 @@ async function addStandardLearningSlide(prs, slide, slideNum, brandColor) {
 
   if (bullets.length > 0) {
     bullets.forEach((bullet, idx) => {
-      // Inline numbered bullet with text
       slid.addText(`${idx + 1}. ${bullet}`, {
         x: textX, y: textCursorY,
         w: textWidth, h: 0.8,
@@ -335,7 +332,6 @@ async function addSafetyCriticalSlide(prs, slide, slideNum, brandColor) {
   const marginH = 0.4;
   const marginV = 0.3;
 
-  // Layout: image left (if exists), text right
   let textX = marginH;
   let textWidth = 8.2 - marginH * 2;
 
@@ -362,7 +358,6 @@ async function addSafetyCriticalSlide(prs, slide, slideNum, brandColor) {
       }
     } catch (imgErr) {
       console.error(`[Slide ${slideNum}] ✗ Image error: ${imgErr.message}`);
-      // Fallback: show placeholder
       slid.addShape(prs.ShapeType.rect, {
         x: imageX, y: imageY,
         w: imageWidth, h: imageHeight,
@@ -389,7 +384,7 @@ async function addSafetyCriticalSlide(prs, slide, slideNum, brandColor) {
   });
   textCursorY += 0.6;
 
-  // Bullets (SOP facts) — clean inline numbered list
+  // Bullets (SOP facts)
   const bulletLines = (slide.body_content || '')
     .split('\n')
     .map(l => {
@@ -417,7 +412,7 @@ async function addSafetyCriticalSlide(prs, slide, slideNum, brandColor) {
     });
   }
 
-  // Hazards box (if no bullets)
+  // Hazards box
   if (bulletLines.length === 0 && slide.safety_callouts && slide.safety_callouts.length > 0) {
     slid.addShape(prs.ShapeType.rect, {
       x: textX, y: textCursorY,
@@ -450,7 +445,7 @@ async function addSafetyCriticalSlide(prs, slide, slideNum, brandColor) {
     });
   }
 
-  // Learning outcome callout (if exists) — amber
+  // Learning outcome callout
   if (slide.key_learning_outcomes && slide.key_learning_outcomes.length > 0) {
     textCursorY += 1.5;
     if (textCursorY < 5.5) {
@@ -510,7 +505,6 @@ async function addProcessChecklistSlide(prs, slide, slideNum, brandColor) {
   const slid = prs.addSlide();
   slid.background = { color: COLORS.white };
 
-  // Header
   slid.addShape(prs.ShapeType.rect, {
     x: 0, y: 0,
     w: '100%', h: 0.458,
@@ -527,7 +521,6 @@ async function addProcessChecklistSlide(prs, slide, slideNum, brandColor) {
     fontFace: 'Calibri'
   });
 
-  // Content area: image left (50%), checklist right (50%)
   const headerBottomY = 0.458;
   const footerHeight = 0.292;
   const contentHeight = 6.25 - headerBottomY - footerHeight;
@@ -541,7 +534,6 @@ async function addProcessChecklistSlide(prs, slide, slideNum, brandColor) {
   const checklistX = imageX + colWidth;
   const checklistWidth = colWidth - 0.4;
 
-  // Image (if exists)
   if (slide.generated_image_url && slide.generated_image_url.trim()) {
     try {
       console.log(`[Slide ${slideNum}] Processing image for process checklist layout`);
@@ -560,7 +552,6 @@ async function addProcessChecklistSlide(prs, slide, slideNum, brandColor) {
       }
     } catch (imgErr) {
       console.error(`[Slide ${slideNum}] ✗ Image error: ${imgErr.message}`);
-      // Fallback: show placeholder
       slid.addShape(prs.ShapeType.rect, {
         x: imageX, y: imageY,
         w: imageWidth, h: imageHeight,
@@ -570,7 +561,6 @@ async function addProcessChecklistSlide(prs, slide, slideNum, brandColor) {
     }
   }
 
-  // Checklist title
   let checklistY = imageY;
   slid.addText(slide.title, {
     x: checklistX, y: checklistY,
@@ -583,7 +573,6 @@ async function addProcessChecklistSlide(prs, slide, slideNum, brandColor) {
   });
   checklistY += 0.6;
 
-  // Checklist items (max 5) — checkbox + text inline
   const checklistItems = (slide.body_content || '')
     .split('\n')
     .map(l => {
@@ -596,7 +585,6 @@ async function addProcessChecklistSlide(prs, slide, slideNum, brandColor) {
     .slice(0, 5);
 
   checklistItems.forEach((bullet, idx) => {
-    // Checkbox (unchecked) — small, inline
     slid.addShape(prs.ShapeType.rect, {
       x: checklistX, y: checklistY + 0.1,
       w: 0.18, h: 0.18,
@@ -604,7 +592,6 @@ async function addProcessChecklistSlide(prs, slide, slideNum, brandColor) {
       line: { color: primaryColor, width: 1.5 }
     });
 
-    // Checkbox text — starts after box
     slid.addText(`☐  ${bullet}`, {
       x: checklistX, y: checklistY,
       w: checklistWidth, h: 0.75,
@@ -619,7 +606,6 @@ async function addProcessChecklistSlide(prs, slide, slideNum, brandColor) {
     checklistY += 0.9;
   });
 
-  // Quality check callout (if exists)
   if (slide.quality_callouts && slide.quality_callouts[0]) {
     checklistY += 0.2;
     slid.addShape(prs.ShapeType.rect, {
@@ -640,7 +626,6 @@ async function addProcessChecklistSlide(prs, slide, slideNum, brandColor) {
     });
   }
 
-  // Footer
   const footerY = 6.25 - footerHeight;
   slid.addShape(prs.ShapeType.rect, {
     x: 0, y: footerY,
@@ -674,10 +659,8 @@ async function addCoverSlide(prs, slide, slideNum, brandColor) {
   const primaryColor = brandColor || COLORS.copper;
   const slid = prs.addSlide();
   
-  // Full-color background
   slid.background = { color: primaryColor };
 
-  // Accent bar (vertical gradient-like stripe)
   slid.addShape(prs.ShapeType.rect, {
     x: 0, y: 0,
     w: 0.15, h: '100%',
@@ -685,7 +668,6 @@ async function addCoverSlide(prs, slide, slideNum, brandColor) {
     line: { type: 'none' }
   });
 
-  // Title (centered, large, white)
   slid.addText(slide.title || 'Training Program', {
     x: 0.5, y: 2.0,
     w: 8.5, h: 1.2,
@@ -699,7 +681,6 @@ async function addCoverSlide(prs, slide, slideNum, brandColor) {
     lineSpacing: 32
   });
 
-  // Subtitle (if exists)
   if (slide.subtitle) {
     slid.addText(slide.subtitle, {
       x: 0.5, y: 3.3,
@@ -713,7 +694,6 @@ async function addCoverSlide(prs, slide, slideNum, brandColor) {
     });
   }
 
-  // Label
   slid.addText('PROFESSIONAL TRAINING', {
     x: 0.5, y: 4.2,
     w: 8.5, h: 0.3,
@@ -724,7 +704,6 @@ async function addCoverSlide(prs, slide, slideNum, brandColor) {
     align: 'center'
   });
 
-  // Cover image (bottom-right, if exists)
   if (slide.generated_image_url) {
     try {
       console.log(`[Slide ${slideNum}] Processing image for cover slide layout`);
@@ -744,7 +723,6 @@ async function addCoverSlide(prs, slide, slideNum, brandColor) {
     }
   }
 
-  // Footer date
   slid.addText(new Date().toLocaleDateString('en-GB'), {
     x: 0.5, y: 6.8,
     w: 8.5, h: 0.25,
@@ -773,7 +751,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { presentation } = req.body;
+    const { presentation, brandKit } = req.body;
 
     if (!presentation || !presentation.slides) {
       return res.status(400).json({ error: 'Missing presentation or slides' });
@@ -789,7 +767,10 @@ export default async function handler(req, res) {
     prs.defineLayout({ name: 'LAYOUT1', width: 10, height: 7.5 });
     prs.defineLayout({ name: 'BLANK', width: 10, height: 7.5 });
 
-    const brandColor = presentation.brandKit?.primary || COLORS.copper;
+    // Use brand kit primary colour (from Company.brand_kit.primary), fallback to default copper
+    const brandColor = brandKit?.primary || COLORS.copper;
+    
+    console.log('[Branding] Using brand color:', brandColor, '| Full brand kit:', brandKit ? Object.keys(brandKit) : 'none');
 
     // Generate slides (async iteration)
     for (let idx = 0; idx < slides.length; idx++) {
@@ -807,7 +788,7 @@ export default async function handler(req, res) {
         await addStandardLearningSlide(prs, slide, slideNum, brandColor);
       }
 
-      // Add presenter notes with avatar script + video reference (if available)
+      // Add presenter notes with avatar script + video reference
       const lastSlide = prs.slides[prs.slides.length - 1];
       if (slide.presenter_notes || slide.avatar_script || slide.avatar_video_url) {
         let notesText = '';
@@ -820,10 +801,7 @@ export default async function handler(req, res) {
 
     // Generate and encode PPTX
     const buffer = await prs.write({ outputType: 'arraybuffer' });
-
-    // Convert to base64
     const base64 = Buffer.from(buffer).toString('base64');
-
     const fileName = `${(presentation.title || 'Presentation').replace(/[^a-zA-Z0-9]/g, '-')}-${new Date().toISOString().split('T')[0]}.pptx`;
 
     return res.status(200).json({
